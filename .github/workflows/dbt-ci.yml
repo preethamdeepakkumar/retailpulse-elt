@@ -1,0 +1,49 @@
+name: RetailPulse CI
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  dbt_test_job:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+
+      - name: Configure dbt profile
+        run: |
+          mkdir -p ~/.dbt
+          echo "
+          retail_pulse:
+            target: dev
+            outputs:
+              dev:
+                type: bigquery
+                method: service-account
+                project: ${{ secrets.GCP_PROJECT_ID }}
+                dataset: staging 
+                threads: 1
+                keyfile: ${{ env.GOOGLE_APPLICATION_CREDENTIALS }}
+          " > ~/.dbt/profiles.yml
+
+      - name: Run dbt models
+        run: dbt run --profiles-dir ~/.dbt
+
+      - name: Run dbt tests
+        run: dbt test --profiles-dir ~/.dbt
